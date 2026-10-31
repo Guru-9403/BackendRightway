@@ -1367,6 +1367,18 @@ app.post(["/api/auth/logout", "/api/logout"], async (req, res) => {
   }
 });
 
+// GET forgot-password fallback (handles browser direct access or accidental GET)
+app.get(["/api/auth/forgot-password", "/api/forgot-password"], (req, res) => {
+  const isHtml = req.accepts("html") && !req.xhr;
+  if (isHtml) {
+    return res.redirect(`${FRONTEND_URL}/login?forgotPassword=1`);
+  }
+  return res.status(405).json({
+    success: false,
+    message: "The forgot password endpoint requires a POST request with { email } in JSON body.",
+  });
+});
+
 // Forgot Password Handler - Generates 6-digit OTP and emails to user via Resend API
 app.post(["/api/auth/forgot-password", "/api/forgot-password"], forgotPasswordRateLimiter, async (req, res) => {
   try {
@@ -1581,6 +1593,22 @@ app.post(["/api/auth/verify-reset-otp", "/api/verify-reset-otp"], async (req, re
     console.error("Verify reset OTP error:", err);
     res.status(500).json({ message: "Server error verifying OTP." });
   }
+});
+
+// GET reset-password fallback (handles reset links clicked in browser)
+app.get(["/api/auth/reset-password", "/api/reset-password"], (req, res) => {
+  const token = req.query.token || req.query.resetToken;
+  if (token) {
+    return res.redirect(`${FRONTEND_URL}/reset-password?token=${encodeURIComponent(token)}`);
+  }
+  const isHtml = req.accepts("html") && !req.xhr;
+  if (isHtml) {
+    return res.redirect(`${FRONTEND_URL}/login?forgotPassword=1`);
+  }
+  return res.status(405).json({
+    success: false,
+    message: "The reset password endpoint requires a POST request with { token, password } in JSON body.",
+  });
 });
 
 // Reset Password Handler - Only allows password reset after successful OTP verification (verified resetToken)
