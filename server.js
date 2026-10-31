@@ -2832,8 +2832,79 @@ app.get("/courses-videos/:filename", (req, res) => {
   res.status(404).send("Video not found");
 });
 
+// Health check endpoints
+app.get(["/health", "/api/health"], (req, res) => {
+  res.json({
+    status: "ok",
+    database: isDbConnected ? "connected" : "connecting",
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// API root info endpoint
+app.get(["/api", "/api/"], (req, res) => {
+  res.json({
+    status: "online",
+    message: "Rightway Skill Builder API is operational.",
+    version: "1.0.0",
+    healthCheck: "/api/health",
+    frontendUrl: FRONTEND_URL,
+  });
+});
+
+// Root route ("/") - Serves status page or redirects to live frontend app
+app.get("/", (req, res) => {
+  if (req.accepts("html") && !req.xhr) {
+    return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rightway Skill Builder API - Online</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 36px 32px; max-width: 480px; width: 100%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); text-align: center; }
+    .badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 9999px; padding: 6px 16px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 10px #22c55e; display: inline-block; }
+    h1 { font-size: 24px; font-weight: 800; margin-bottom: 8px; color: #fff; }
+    h1 span { color: #ef4444; }
+    p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+    .links { display: flex; flex-direction: column; gap: 10px; }
+    a.btn { display: block; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; text-decoration: none; transition: 0.2s; }
+    .btn-primary { background: #ef4444; color: #fff; }
+    .btn-primary:hover { background: #dc2626; }
+    .btn-secondary { background: #334155; color: #cbd5e1; }
+    .btn-secondary:hover { background: #475569; color: #fff; }
+    .footer { margin-top: 24px; font-size: 12px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge"><span class="dot"></span> Backend API Operational</div>
+    <h1>Rightway <span>Skill Builder</span></h1>
+    <p>The backend API service is running smoothly. For courses and interactive learning, visit the web application.</p>
+    <div class="links">
+      <a class="btn btn-primary" href="${FRONTEND_URL}">Open Live Web App &rarr;</a>
+      <a class="btn btn-secondary" href="/api/health">Check API Health Status</a>
+    </div>
+    <div class="footer">Rightway Skill Builder API &bull; Express</div>
+  </div>
+</body>
+</html>`);
+  }
+  return res.json({
+    status: "online",
+    message: "Rightway Skill Builder API is operational.",
+    version: "1.0.0",
+    frontendUrl: FRONTEND_URL,
+    health: "/api/health",
+  });
+});
+
 // Dedicated 404 handler for unknown API routes (never return HTML index.html for API calls)
-app.all("/api/*", (req, res) => {
+app.all(["/api", "/api/*"], (req, res) => {
   res.status(404).json({ message: `API endpoint not found: ${req.method} ${req.originalUrl}` });
 });
 
@@ -2847,6 +2918,17 @@ if (fs.existsSync(DIST_DIR)) {
     } else {
       res.status(404).send("Frontend not built. Run: cd frontend && npm run build");
     }
+  });
+} else {
+  // Graceful fallback for non-API routes when backend is deployed standalone
+  app.get("*", (req, res) => {
+    if (req.accepts("html") && !req.xhr) {
+      return res.redirect(`${FRONTEND_URL}${req.originalUrl}`);
+    }
+    res.status(404).json({
+      message: `Cannot ${req.method} ${req.originalUrl}`,
+      frontendUrl: FRONTEND_URL,
+    });
   });
 }
 
