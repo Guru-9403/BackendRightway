@@ -25,7 +25,16 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "rightway_refresh_s
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "15m";
 const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || "7d";
 
-const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+function sanitizeUrl(raw, fallback = "https://rightwayskillbuilder.vercel.app") {
+  if (!raw || typeof raw !== "string" || !raw.trim()) return fallback;
+  let clean = raw.trim().replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(clean)) {
+    clean = `https://${clean}`;
+  }
+  return clean;
+}
+
+const FRONTEND_URL = sanitizeUrl(process.env.FRONTEND_URL, "https://rightwayskillbuilder.vercel.app");
 const DIST_DIR = path.resolve(process.env.FRONTEND_DIST || path.join(__dirname, "..", "frontend", "dist"));
 const VIDEOS_DIR = path.resolve(__dirname, "videos");
 
@@ -1369,7 +1378,7 @@ app.post(["/api/auth/logout", "/api/logout"], async (req, res) => {
 
 // GET forgot-password fallback (handles browser direct access or accidental GET)
 app.get(["/api/auth/forgot-password", "/api/forgot-password"], (req, res) => {
-  const isHtml = req.accepts("html") && !req.xhr;
+  const isHtml = req.accepts("html") && !req.xhr && req.headers["sec-fetch-dest"] !== "empty";
   if (isHtml) {
     return res.redirect(`${FRONTEND_URL}/login?forgotPassword=1`);
   }
@@ -1598,10 +1607,10 @@ app.post(["/api/auth/verify-reset-otp", "/api/verify-reset-otp"], async (req, re
 // GET reset-password fallback (handles reset links clicked in browser)
 app.get(["/api/auth/reset-password", "/api/reset-password"], (req, res) => {
   const token = req.query.token || req.query.resetToken;
+  const isHtml = req.accepts("html") && !req.xhr && req.headers["sec-fetch-dest"] !== "empty";
   if (token) {
     return res.redirect(`${FRONTEND_URL}/reset-password?token=${encodeURIComponent(token)}`);
   }
-  const isHtml = req.accepts("html") && !req.xhr;
   if (isHtml) {
     return res.redirect(`${FRONTEND_URL}/login?forgotPassword=1`);
   }
@@ -2922,7 +2931,7 @@ if (fs.existsSync(DIST_DIR)) {
 } else {
   // Graceful fallback for non-API routes when backend is deployed standalone
   app.get("*", (req, res) => {
-    if (req.accepts("html") && !req.xhr) {
+    if (req.accepts("html") && !req.xhr && req.headers["sec-fetch-dest"] !== "empty") {
       return res.redirect(`${FRONTEND_URL}${req.originalUrl}`);
     }
     res.status(404).json({
